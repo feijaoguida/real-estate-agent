@@ -1,0 +1,101 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id         String              @id @default(uuid())
+  name       String
+  instances  EvolutionInstance[]
+  customers  Customer[]
+  agents     Agent[]
+}
+
+model EvolutionInstance {
+  id          String   @id @default(uuid())
+  name        String
+  sessionId   String   @unique
+  token       String?  @unique
+  qrCode      String?
+  connected   Boolean  @default(false)
+
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id])
+  chats       Chat[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Customer {
+  id         String   @id @default(uuid())
+  phone      String
+  companyId  String
+  company    Company  @relation(fields: [companyId], references: [id])
+  chats      Chat[]
+}
+
+model Chat {
+  id          String             @id @default(uuid())
+  instanceId  String
+  instance    EvolutionInstance  @relation(fields: [instanceId], references: [id])
+  customerId  String
+  customer    Customer           @relation(fields: [customerId], references: [id])
+  messages    Message[]
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  chatId    String
+  chat      Chat     @relation(fields: [chatId], references: [id])
+  fromMe    Boolean
+  text      String?
+  createdAt DateTime @default(now())
+}
+
+model Agent {
+  id        String   @id @default(uuid())
+  name      String
+  style     String   // Ex: "Persuasivo, Educado, Rápido"
+
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+
+// model Agent {
+//   id        Int      @id @default(autoincrement())
+//   name      String
+//   style     String   // Ex: "Persuasivo, Educado, Rápido"
+//   createdAt DateTime @default(now())
+// }
+
+// model EvolutionInstance {
+//   id          Int      @id @default(autoincrement())
+//   name        String   // Ex: "Cliente A", "Empresa B"
+//   sessionId   String   @unique// Id da sessão no Evolution
+//   token     String?  @unique   // <--- necessário para buscar pela token
+//   qrCode      String?  // Base64 do QR Code gerado
+//   connected   Boolean  @default(false)
+//   createdAt   DateTime @default(now())
+//   updatedAt   DateTime @updatedAt
+// }
+// // sessionId: cada instância criada no Evolution precisa de um identificador único.
+// // qrCode: para gerar e mostrar ao cliente.
+// // connected: flag de status da conexão.
+
+// model EvolutionMessage {
+//   id        String   @id @default(uuid())
+//   remoteJid String
+//   message   String
+//   type      String
+//   fromMe    Boolean
+//   timestamp DateTime @default(now())
+// }
+
