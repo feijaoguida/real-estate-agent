@@ -28,6 +28,7 @@
     "@nestjs/platform-express": "^10.4.20",
     "@nestjs/swagger": "^8.1.1",
     "@prisma/client": "^6.15.0",
+    "@supabase/supabase-js": "^2.57.2",
     "axios": "^1.11.0",
     "bullmq": "^5.9.1",
     "class-transformer": "^0.5.1",
@@ -39,6 +40,7 @@
     "qrcode-terminal": "^0.12.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "supabase": "^2.39.2",
     "swagger-ui-express": "^5.0.1",
     "uuid": "^9.0.1",
     "zod": "^3.23.8"

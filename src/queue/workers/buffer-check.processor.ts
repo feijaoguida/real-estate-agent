@@ -11,6 +11,7 @@ type BufferCheckPayload = {
   pushName?: string;
   lastMessage: string;
   number: string;
+  userId: string;
 };
 
 @Processor('buffer-check')
@@ -27,8 +28,15 @@ export class BufferCheckProcessor extends WorkerHost {
 
   async process(job: any): Promise<any> {
     console.log('processando buffer-check');
-    const { remoteJid, apikey, instance, pushName, lastMessage, number } =
-      job.data as BufferCheckPayload;
+    const {
+      remoteJid,
+      apikey,
+      instance,
+      pushName,
+      lastMessage,
+      number,
+      userId,
+    } = job.data as BufferCheckPayload;
 
     // revalida se entrou pausa nesse meio tempo
     const paused = await this.redis.get(`Pausar:${remoteJid}`);
@@ -53,6 +61,7 @@ export class BufferCheckProcessor extends WorkerHost {
       pushName || '',
       conversation,
       historyWindow,
+      userId,
     );
 
     // split por linhas / filtra vazias / ignora .webp (espelhando switch do N8N)

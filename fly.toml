@@ -1,42 +1,36 @@
-# fly.toml file generated for real-estate-agent on 2022-12-17T18:16:35-03:00
+# Nome do app no Fly.io
+app = "meu-nestjs-app"
 
-app = "real-estate-agent"
-kill_signal = "SIGINT"
-kill_timeout = 5
-processes = []
+# Região do datacenter (opcional, padrão é ams)
+region = "gru"
 
-[env]
-  LOG_CHANNEL = "stderr"
-  LOG_LEVEL = "info"
-  LOG_STDERR_FORMATTER = "Monolog\\Formatter\\JsonFormatter"
-  PORT = "8080"
+# Build usando buildpacks
+[build]
+  builder = "heroku/buildpacks:20"
 
-[experimental]
-  allowed_public_ports = []
-  auto_rollback = true
-
+# Serviço exposto pelo Fly.io
 [[services]]
-  http_checks = []
-  internal_port = 8080
-  processes = ["app"]
+  internal_port = 3000
   protocol = "tcp"
-  script_checks = []
-  [services.concurrency]
-    hard_limit = 25
-    soft_limit = 20
-    type = "connections"
 
+  # Portas externas HTTP e HTTPS
   [[services.ports]]
-    force_https = true
-    handlers = ["http"]
     port = 80
+    handlers = ["http"]
 
   [[services.ports]]
-    handlers = ["tls", "http"]
     port = 443
+    handlers = ["tls", "http"]
 
+  # Health check TCP simples
   [[services.tcp_checks]]
-    grace_period = "1s"
-    interval = "15s"
+    interval = 10000
+    timeout = 2000
+    grace_period = "5s"
     restart_limit = 0
-    timeout = "2s"
+
+# Variáveis de ambiente
+[env]
+  NODE_ENV = "production"
+  PORT = "3000"
+  # DATABASE_URL = "postgres://usuario:senha@host:porta/db"

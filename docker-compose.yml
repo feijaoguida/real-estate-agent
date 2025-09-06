@@ -1,0 +1,8 @@
+version: '3.9'
+services:
+  api_autoZap:
+    build: .
+    container_name: api_autoZap
+    restart: always
+    ports:
+      - '3000:3000'

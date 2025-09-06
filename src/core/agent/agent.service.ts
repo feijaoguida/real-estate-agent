@@ -2,20 +2,29 @@ import { Injectable } from '@nestjs/common';
 import OpenAI from 'openai';
 import axios from 'axios';
 import dayjs from 'dayjs';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { tryCatch } from 'bullmq';
 
 type ToolResult = any;
 
 @Injectable()
 export class AgentService {
+  [x: string]: any;
   private clientOPenAI: OpenAI;
+  private supabase: SupabaseClient;
 
   constructor() {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OPENAI_API_KEY é obrigatório');
     this.clientOPenAI = new OpenAI({ apiKey });
+
+    const supabaseHomolog = createClient(
+      'https://ueguhrllergaoykngjga.supabase.co', // URL homolog
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVlZ3VocmxsZXJnYW95a25namdhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU5OTYxODYsImV4cCI6MjA3MTU3MjE4Nn0.vPIVvqzMrbCa2ItwI5dc81Hk0wzCA1cfZTiYJBopJEg', // chave anon homolog
+    );
   }
 
-  private systemPrompt(pushName: string) {
+  private async systemPrompt(pushName: string, userId: string) {
     const now = new Date();
     // Formatadores para pt-BR (timezone São Paulo)
     const fmtWeekday = new Intl.DateTimeFormat('pt-BR', {
@@ -34,6 +43,10 @@ export class AgentService {
       hour12: false,
       timeZone: 'America/Sao_Paulo',
     });
+
+    const dataAgent = await this.getAgents(userId);
+
+    console.log('data agent.service', dataAgent);
 
     const weekday = fmtWeekday.format(now);
     const date = fmtDate.format(now);
@@ -385,15 +398,31 @@ Show! Vou te colocar em contato com nosso especialista.
     },
   ] as const;
 
+  private async getAgents(userId: string) {
+    console.log('getAgents userId', userId);
+    try {
+      const agent = await this.supabase
+        .from('agents')
+        .select('*')
+        .eq('user_id', userId)
+        .single(); // ou remove .single() se quiser todos os agentes do usuário
+      return agent;
+    } catch (error) {
+      console.error('Erro ao buscar agent na homolog:', error);
+      return null;
+    }
+  }
+
   async runAgent(
     pushName: string,
     conversation: string,
     historyWindow: string[],
+    userId: string,
   ) {
     console.log('runAgent', pushName, conversation, historyWindow);
     // Monta histórico simples: últimas mensagens como contexto
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
-      { role: 'system', content: this.systemPrompt(pushName) },
+      { role: 'system', content: await this.systemPrompt(pushName, userId) },
       ...historyWindow.map((m) => ({ role: 'user', content: m }) as const),
       { role: 'user', content: conversation },
     ];
