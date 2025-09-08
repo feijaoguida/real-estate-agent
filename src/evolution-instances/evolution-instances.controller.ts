@@ -8,29 +8,29 @@ import { ApiBody, ApiOperation, ApiTags, ApiQuery } from '@nestjs/swagger';
 export class EvolutionInstancesController {
   constructor(private readonly service: EvolutionInstancesService) {}
 
-  @Post()
-  @ApiOperation({ summary: 'Cria uma nova instância e retorna QR Code' })
-  @ApiBody({ type: CreateInstanceDTO })
-  async create(@Body() dto: CreateInstanceDTO) {
-    return this.service.createInstance(dto);
-  }
+  // @Post()
+  // @ApiOperation({ summary: 'Cria uma nova instância e retorna QR Code' })
+  // @ApiBody({ type: CreateInstanceDTO })
+  // async create(@Body() dto: CreateInstanceDTO) {
+  //   return this.service.createInstance(dto);
+  // }
 
-  @Get()
-  @ApiOperation({ summary: 'Lista todas as instâncias' })
-  @ApiQuery({
-    name: 'companyId',
-    required: false,
-    description: 'Filtrar por empresa (opcional)',
-  })
-  async listAll(@Query('companyId') companyId?: string) {
-    return this.service.getAllInstances(companyId);
-  }
+  // @Get()
+  // @ApiOperation({ summary: 'Lista todas as instâncias' })
+  // @ApiQuery({
+  //   name: 'companyId',
+  //   required: false,
+  //   description: 'Filtrar por empresa (opcional)',
+  // })
+  // async listAll(@Query('companyId') companyId?: string) {
+  //   return this.service.getAllInstances(companyId);
+  // }
 
-  @Get(':sessionId')
-  @ApiOperation({ summary: 'Gera QR Code para uma instância existente' })
-  async getInstance(@Param('sessionId') sessionId: string) {
-    const company = 'company-a';
-    const sessionName = 'session-a';
-    return this.service.getQRCode(sessionId, company, sessionName);
-  }
+  // @Get(':sessionId')
+  // @ApiOperation({ summary: 'Gera QR Code para uma instância existente' })
+  // async getInstance(@Param('sessionId') sessionId: string) {
+  //   const company = 'company-a';
+  //   const sessionName = 'session-a';
+  //   return this.service.getQRCode(sessionId, company, sessionName);
+  // }
 }

@@ -1,8 +1,17 @@
 version: '3.9'
 services:
-  api_autoZap:
+  real-estate-agent:
     build: .
-    container_name: api_autoZap
+    container_name: real-estate-agent
     restart: always
     ports:
       - '3000:3000'
+    env_file:
+      - .env
+
+  redis-real-estate-agent:
+    image: redis:7
+    container_name: redis-real-estate-agent
+    restart: always
+    ports:
+      - '6379:6379'

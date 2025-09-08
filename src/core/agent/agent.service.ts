@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import OpenAI from 'openai';
 import axios from 'axios';
-import dayjs from 'dayjs';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { tryCatch } from 'bullmq';
+import { SupabaseService } from 'src/supabase/supabase.service';
+import Redis from 'ioredis';
 
 type ToolResult = any;
 
@@ -11,17 +12,17 @@ type ToolResult = any;
 export class AgentService {
   [x: string]: any;
   private clientOPenAI: OpenAI;
-  private supabase: SupabaseClient;
 
-  constructor() {
+  constructor(
+    private readonly supabaseService: SupabaseService,
+    @Inject('REDIS') private readonly redis: Redis,
+  ) {
+    const IORedis = require('ioredis');
+    const conn = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379');
+
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OPENAI_API_KEY é obrigatório');
     this.clientOPenAI = new OpenAI({ apiKey });
-
-    const supabaseHomolog = createClient(
-      'https://ueguhrllergaoykngjga.supabase.co', // URL homolog
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVlZ3VocmxsZXJnYW95a25namdhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU5OTYxODYsImV4cCI6MjA3MTU3MjE4Nn0.vPIVvqzMrbCa2ItwI5dc81Hk0wzCA1cfZTiYJBopJEg', // chave anon homolog
-    );
   }
 
   private async systemPrompt(pushName: string, userId: string) {
@@ -81,179 +82,22 @@ export class AgentService {
         Responda sempre em português do Brasil.
         -------------------------------------------------------------------------------------------------`;
 
-    const userPrompt = `
-    ------------------------------------------------------------------------------------------------
-
-## CONFIGURAÇÕES DO AGENTE
-
-#NOME DO AGENTE:  
-Roseweltty
-
-#TOM DE VOZ:  
-Gentil, direto ao ponto e com postura de corretor experiente
-
-#PERSONA:  
-Corretor de imóveis especializado no empreendimento Harmony Park Way, atuando diretamente no WhatsApp com clientes interessados. Fala sempre em primeira pessoa, como um consultor humano da equipe Roseweltty, especialista em imóveis de alto padrão.
-
-#PÚBLICO-ALVO:  
-Clientes interessados em apartamentos de alto padrão em Goiânia, especialmente na região do Setor Bueno.
-
-#OBJETIVO DO AGENTE:  
-1.⁠ ⁠Iniciar a conversa com calma e empatia, perguntando o nome do lead  
-2.⁠ ⁠Entender a necessidade do cliente antes de apresentar opções  
-3.⁠ ⁠Coletar informações essenciais (tipo de unidade, urgência, forma de pagamento, posição solar desejada)  
-4.⁠ ⁠Somente após entender o perfil, propor agendamento perguntando data e horário  
-5.⁠ ⁠Coletar todos os dados obrigatórios para agendamento  
-6.⁠ ⁠Agendar visitas com precisão e executar ferramentas corretamente  
-7.⁠ ⁠Levar o lead à ação: visita agendada, simulação de pagamento ou encaminhamento
-
-#ESTRATÉGIA DE CONVERSA: SPIN SELLING  
-•⁠  ⁠Situação: entender o contexto atual do cliente  
-•⁠  ⁠Problema: identificar dificuldades na busca por imóveis  
-•⁠  ⁠Implicação: destacar impacto de não agir logo  
-•⁠  ⁠Necessidade: validar o desejo e urgência da solução
-
-#INSTRUÇÕES ESPECIAIS:
-
-•⁠  ⁠Sempre aja como *Roseweltty*, nunca diga que é um assistente ou IA.  
-•⁠  ⁠Use *linguagem ativa, humanizada e com frases curtas*.  
-•⁠  ⁠Comece sempre perguntando o *nome do lead*.  
-•⁠  ⁠Só avance para o agendamento *após entender o interesse e perfil do cliente*.  
-•⁠  ⁠Antes de usar a ferramenta *agendaVisita, **pergunte e colete todos os dados obrigatórios*:  
-  • Nome completo  
-  • E-mail  
-  • Telefone  
-  • Data  
-  • Horário 
-
-Faça sempre um pergunta por vez, nunca envie duas ou mais perguntas de uma só vez.
-
-Nunca fica repetindo o que o lead falou, siga para o proximo passo.
-
-Nunca fique se repetindo o mesmo assunto, siga para o proximo passo.
-
-Nunca mande "[nome]" isso é uma expressão para nome do lead, você sempre deve perguntar o nome dele antes.
-Nunca mande "Seu lead foi criado" após utilizar a ferramenta criar lead. Apenas siga a conversa.
-•⁠  ⁠Use cada ferramenta (agendaVisita, criaLead) *apenas uma única vez por lead*.  
-•⁠  ⁠Sempre que o cliente perguntar sobre produto, localização, empresa, diferenciais ou pagamento, consulte este prompt antes de responder.  
-•⁠  ⁠Ao agendar uma visita, envie os parâmetros com *a data e hora exata informada pelo cliente*.  
-•⁠  ⁠As ferramentas *devem sempre ser executadas corretamente*.
-
-#FRASES DE APOIO E EXEMPLOS:
-
-## SAUDAÇÃO INICIAL:  
-Olá! Tudo bem?  
-Sou o Ricardo, especialista no Harmony Park Way.  
-Antes da gente começar, posso saber seu nome?
-
-## SEQUÊNCIA RECOMENDADA:  
-1.⁠ ⁠Perguntar o nome  
-2.⁠ ⁠Confirmar se o cliente está buscando para morar ou investir  
-3.⁠ ⁠Entender tipo de imóvel, urgência e preferência (andar, posição solar)  
-4.⁠ ⁠Só então, convidar para visita e perguntar dia e horário disponíveis  
-5.⁠ ⁠Coletar nome completo, e-mail e telefone antes de usar a ferramenta
-
-## PERGUNTAS DE SITUAÇÃO:  
-•⁠  ⁠Está buscando para morar ou investir?  
-•⁠  ⁠Qual tipo de imóvel você procura? 2 ou 3 suítes?
-
-## PERGUNTAS DE PROBLEMA:  
-•⁠  ⁠Está com dificuldade de encontrar algo no seu perfil?  
-•⁠  ⁠Já viu outros empreendimentos?
-
-## PERGUNTAS DE IMPLICAÇÃO:  
-•⁠  ⁠Isso tem atrasado seus planos?  
-•⁠  ⁠Está com urgência?
-
-## PERGUNTAS DE NECESSIDADE:  
-•⁠  ⁠Se eu te mostrar uma opção ideal, você visitaria pessoalmente?  
-•⁠  ⁠Qual dia e horário funcionam melhor pra você?
-
-## RESPOSTA PADRÃO PARA DÚVIDAS QUE NÃO SABE RESPONDER:  
-Boa pergunta! Vou verificar com o time e te respondo certinho.
-
-## RESPOSTA FINAL PARA TRANSFERÊNCIA HUMANA:  
-Show! Vou te colocar em contato com nosso especialista.
-
-#DADOS DO CORRETOR OU TIME HUMANO:  
-•⁠  ⁠Nome: Ricardo  
-•⁠  ⁠Região de atuação: Goiânia – Setor Bueno  
-•⁠  ⁠Tipos de imóveis: Apartamentos de 2 e 3 suítes alto padrão  
-•⁠  ⁠Canal de atendimento: WhatsApp comercial
-
-#INFORMAÇÕES DO PRODUTO – HARMONY PARK WAY:
-
-## 1. SOBRE O EMPREENDIMENTO:  
-•⁠  ⁠Nome: Harmony Park Way  
-•⁠  ⁠Construtora: Magen Construtora (alto padrão desde 2015)  
-•⁠  ⁠Localização: Av. T-11, Setor Bueno, Goiânia – GO  
-•⁠  ⁠Entrega prevista: Maio de 2027  
-•⁠  ⁠Conceito: Harmonia entre design, conforto e vida urbana, entre o Parque Vaca Brava e o Parque Areião  
-
-## 2. OPÇÕES DE UNIDADES:  
-### Apartamento 2 Suítes – 75 m²  
-•⁠  ⁠55 unidades disponíveis  
-•⁠  ⁠Preço: R$ 795.480 a R$ 876.760 (média: R$ 842.095)  
-•⁠  ⁠1 vaga de garagem  
-•⁠  ⁠Diferenciais: Fechadura digital, porcelanato 90x90, ar-condicionado, churrasqueira a gás, banheiros ventilados naturalmente
-
-### Apartamento 3 Suítes – 118 m²  
-•⁠  ⁠22 unidades disponíveis  
-•⁠  ⁠Preço: R$ 1.357.805 a R$ 1.428.647 (média: R$ 1.401.276)  
-•⁠  ⁠2 vagas de garagem  
-•⁠  ⁠Diferenciais: Mesmo padrão da unidade de 75 m², com suíte extra e varanda
-
-### Penthouses – 4 Suítes – 243 m²  
-•⁠  ⁠ESGOTADAS  
-•⁠  ⁠Use como argumento de exclusividade e urgência
-
-## 3. POSIÇÃO SOLAR:  
-### 75 m²  
-•⁠  ⁠Finais 01, 02, 05, 06: Poente  
-•⁠  ⁠Finais 03, 04: Nascente  
-
-### 118 m²  
-•⁠  ⁠Finais 01, 02: Poente  
-•⁠  ⁠Finais 03, 04: Nascente  
-
-## 4. ÁREAS DE LAZER:  
-•⁠  ⁠Piscinas aquecidas, salão de festas, gourmet, churrasqueira  
-•⁠  ⁠Academia, sauna, playground, brinquedoteca  
-•⁠  ⁠Street Ball, coworking, espaço de jogos, mercadinho  
-•⁠  ⁠Estação de recarga para carro elétrico, irrigação automática, filtragem de água, segurança 24h
-
-## 5. FORMAS DE PAGAMENTO:
-
-### Opção 1: Direto com a Construtora (Obra até 2027)  
-•⁠  ⁠Entrada: 8 a 10%  
-•⁠  ⁠Parcelas mensais corrigidas por INCC  
-•⁠  ⁠Reforços anuais  
-•⁠  ⁠Chaves em Maio/2027
-
-### Opção 2: Financiamento Bancário  
-•⁠  ⁠Entrada a partir de 20%  
-•⁠  ⁠Financiamento do saldo após a entrega  
-•⁠  ⁠Simulador disponível: Itaú, Bradesco, Santander, Caixa  
-
-## Scripts de venda:  
-•⁠  ⁠“As unidades de 2 quartos partem de R$ 795 mil. Já as de 3 suítes, de R$ 1.357.805. Qual te chama mais atenção?”  
-•⁠  ⁠“As penthouses já esgotaram! A demanda está alta. Vamos agendar sua visita para garantir as melhores unidades ainda disponíveis?”  
-•⁠  ⁠“Com entrada flexível e parcelas durante a obra, conseguimos montar um plano ideal para você. Que dia e horário podemos agendar sua visita?”
-
----`;
+    const userPrompt = dataAgent[0]?.instruction;
 
     // juntar requirePrompt e userPrompt
     requirePrompt += userPrompt;
+
+    console.log('requirePrompt', requirePrompt);
 
     return requirePrompt;
   }
 
   // === Tools ===
 
-  private async tool_obterImoveis(): Promise<ToolResult> {
+  private async tool_obterImoveis(userEmail: string): Promise<ToolResult> {
     const base = process.env.SUPABASE_BASE_URL;
     const key = process.env.SUPABASE_ANON_OR_SERVICE_KEY;
-    const userEmail = process.env.SUPABASE_USER_EMAIL;
+
     const path =
       process.env.SUPABASE_FN_OBTER_IMOVEIS || '/functions/v1/listar-imoveis';
     const url = `${base}${path}`;
@@ -294,16 +138,18 @@ Show! Vou te colocar em contato com nosso especialista.
     return `${hh}:${mm}`;
   }
 
-  private async tool_agendaVisita(input: {
-    lead_id: string;
-    schedule_date: string;
-    schedule_time: string;
-    notes?: string;
-    property_interest_id?: string;
-  }): Promise<ToolResult> {
+  private async tool_agendaVisita(
+    input: {
+      lead_id: string;
+      schedule_date: string;
+      schedule_time: string;
+      notes?: string;
+      property_interest_id?: string;
+    },
+    userEmail: string,
+  ): Promise<ToolResult> {
     const base = process.env.SUPABASE_BASE_URL;
     const key = process.env.SUPABASE_ANON_OR_SERVICE_KEY;
-    const userEmail = process.env.SUPABASE_USER_EMAIL;
     const path =
       process.env.SUPABASE_FN_AGENDAR_VISITA || '/functions/v1/agendar-visita';
     const url = `${base}${path}`;
@@ -318,14 +164,16 @@ Show! Vou te colocar em contato com nosso especialista.
     return data;
   }
 
-  private async tool_criaLead(input: {
-    name: string;
-    email: string;
-    phone: string;
-  }): Promise<ToolResult> {
+  private async tool_criaLead(
+    input: {
+      name: string;
+      email: string;
+      phone: string;
+    },
+    userEmail: string,
+  ): Promise<ToolResult> {
     const base = process.env.SUPABASE_BASE_URL;
     const key = process.env.SUPABASE_ANON_OR_SERVICE_KEY;
-    const userEmail = process.env.SUPABASE_USER_EMAIL;
     const path =
       process.env.SUPABASE_FN_CRIAR_LEAD || '/functions/v1/n8n-criar-lead';
     const url = `${base}${path}`;
@@ -336,10 +184,9 @@ Show! Vou te colocar em contato com nosso especialista.
     return data;
   }
 
-  private async tool_listarLeads(): Promise<ToolResult> {
+  private async tool_listarLeads(userEmail: string): Promise<ToolResult> {
     const base = process.env.SUPABASE_BASE_URL;
     const key = process.env.SUPABASE_ANON_OR_SERVICE_KEY;
-    const userEmail = process.env.SUPABASE_USER_EMAIL;
     const path =
       process.env.SUPABASE_FN_LISTAR_LEADS || '/functions/v1/listar-leads';
     const url = `${base}${path}`;
@@ -399,18 +246,50 @@ Show! Vou te colocar em contato com nosso especialista.
   ] as const;
 
   private async getAgents(userId: string) {
-    console.log('getAgents userId', userId);
+    console.log('userId getAgents before', userId);
+
+    const newCachedKey = `agents_id:${userId}`;
+
+    console.log(`Buscando agents para userId ${userId}`, newCachedKey);
+
+    // 1️⃣ Tenta pegar do Redis
+    let cached: any;
     try {
-      const agent = await this.supabase
-        .from('agents')
-        .select('*')
-        .eq('user_id', userId)
-        .single(); // ou remove .single() se quiser todos os agentes do usuário
-      return agent;
+      cached = await this.redis.get(newCachedKey);
     } catch (error) {
-      console.error('Erro ao buscar agent na homolog:', error);
-      return null;
+      console.log(
+        `Erro ao buscar agents para userId ${userId}: ${error.message}`,
+      );
     }
+
+    if (cached) {
+      console.log(`Cache HIT para userId ${userId}`);
+      return JSON.parse(cached);
+    }
+
+    console.log('cached getAgents', cached);
+
+    console.log(`Cache MISS para userId ${userId}, consultando Supabase...`);
+
+    // 2️⃣ Consulta no Supabase
+    const data = await this.supabaseService.getAgentsByUserId(userId);
+    console.log('Data getAgentsByUserId', data);
+    // const url = `${this.baseUrl}/agents?user_id=eq.${encodeURIComponent(userId)}&select=*`;
+    // const { data } = await firstValueFrom(
+    //   this.http.get(url, { headers: this.headers }),
+    // );
+
+    if (!data || data.length === 0) {
+      console.log(`Nenhum agent encontrado para userId ${userId}`);
+      return [];
+    }
+
+    // 3️⃣ Salva no Redis com TTL (ex: 1 hora)
+    await this.redis.setex(newCachedKey, 3600, JSON.stringify(data));
+
+    console.log('Data getAgentsByUserId', data);
+
+    return data;
   }
 
   async runAgent(
@@ -419,7 +298,11 @@ Show! Vou te colocar em contato com nosso especialista.
     historyWindow: string[],
     userId: string,
   ) {
-    console.log('runAgent', pushName, conversation, historyWindow);
+    console.log('runAgent', pushName, conversation, historyWindow, userId);
+
+    const agents = await this.getAgents(userId);
+    console.log('agentes', agents);
+    let USER_EMAIL = agents[0].user_email;
     // Monta histórico simples: últimas mensagens como contexto
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       { role: 'system', content: await this.systemPrompt(pushName, userId) },
@@ -463,11 +346,14 @@ Show! Vou te colocar em contato com nosso especialista.
 
         let result: any = null;
         try {
-          if (name === 'obterImoveis') result = await this.tool_obterImoveis();
+          if (name === 'obterImoveis')
+            result = await this.tool_obterImoveis(USER_EMAIL);
           if (name === 'agendaVisita')
-            result = await this.tool_agendaVisita(args);
-          if (name === 'criaLead') result = await this.tool_criaLead(args);
-          if (name === 'listarLeads') result = await this.tool_listarLeads();
+            result = await this.tool_agendaVisita(args, USER_EMAIL);
+          if (name === 'criaLead')
+            result = await this.tool_criaLead(args, USER_EMAIL);
+          if (name === 'listarLeads')
+            result = await this.tool_listarLeads(USER_EMAIL);
         } catch (e: any) {
           result = { error: true, message: e?.message || String(e) };
         }

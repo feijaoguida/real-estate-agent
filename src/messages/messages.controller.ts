@@ -16,38 +16,38 @@ export class MessagesController {
     private readonly agentsService: AgentsService,
   ) {}
 
-  @Post()
-  @ApiOperation({
-    summary: 'Recebe mensagem do WhatsApp e responde via agente IA',
-  })
-  @ApiResponse({
-    status: 201,
-    description: 'Mensagem processada e resposta enviada.',
-    type: MessageResponseDto,
-  })
-  async receiveMessage(
-    @Body() body: MessageDto,
-    @Query('agentId') agentId?: string, // Opcional, pode escolher agente
-  ) {
-    const { from, message } = body;
+  // @Post()
+  // @ApiOperation({
+  //   summary: 'Recebe mensagem do WhatsApp e responde via agente IA',
+  // })
+  // @ApiResponse({
+  //   status: 201,
+  //   description: 'Mensagem processada e resposta enviada.',
+  //   type: MessageResponseDto,
+  // })
+  // async receiveMessage(
+  //   @Body() body: MessageDto,
+  //   @Query('agentId') agentId?: string, // Opcional, pode escolher agente
+  // ) {
+  //   const { from, message } = body;
 
-    let agentStyle: string | undefined;
+  //   let agentStyle: string | undefined;
 
-    if (agentId) {
-      const agent = await this.agentsService.getAgentById(agentId);
-      if (agent) agentStyle = agent.style;
-    }
+  //   if (agentId) {
+  //     const agent = await this.agentsService.getAgentById(agentId);
+  //     if (agent) agentStyle = agent.style;
+  //   }
 
-    console.log('agentStyle', agentStyle);
+  //   console.log('agentStyle', agentStyle);
 
-    // Envia para o ChatGPT com estilo do agente
-    const reply = await this.chatGptService.sendMessage(message, agentStyle);
+  //   // Envia para o ChatGPT com estilo do agente
+  //   const reply = await this.chatGptService.sendMessage(message, agentStyle);
 
-    console.log('reply', reply);
+  //   console.log('reply', reply);
 
-    // Responde via Evolution
-    await this.evolutionService.sendMessage(from, reply);
+  //   // Responde via Evolution
+  //   await this.evolutionService.sendMessage(from, reply);
 
-    return { status: 'ok', reply };
-  }
+  //   return { status: 'ok', reply };
+  // }
 }
