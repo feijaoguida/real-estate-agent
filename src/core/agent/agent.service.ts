@@ -26,10 +26,10 @@ export class AgentService implements OnModuleInit {
 
   async onModuleInit() {
     // já carrega os dados do agent ao subir o módulo
-    await this.loadAgent();
+    // await this.loadAgent();
   }
 
-  private async loadAgent(userId: string = 'default') {
+  private async loadAgent(userId: string) {
     const cacheKey = `agent:data:${userId}`;
 
     // tenta pegar do Redis
@@ -52,20 +52,17 @@ export class AgentService implements OnModuleInit {
         'EX',
         60 * 10,
       );
-      console.log('Agent carregado do Supabase');
+      console.log('Agent carregado do Supabase this.dataAgent', this.dataAgent);
     }
 
     // inicializa OpenAI com a chave do agent
-    if (this.dataAgent?.openaiKey) {
-      this.clientOpenAI = new OpenAI({ apiKey: this.dataAgent.openaiKey });
+    if (this.dataAgent?.openai_token) {
+      console.log('entrou em this.dataAgent?.openai_token');
+      this.clientOpenAI = new OpenAI({ apiKey: this.dataAgent.openai_token });
       console.log('OpenAI client inicializado com a chave do agent');
     } else {
       throw new Error('Agent não possui chave OpenAI');
     }
-  }
-
-  getAgentData() {
-    return this.dataAgent;
   }
 
   private async systemPrompt(pushName: string, userId: string) {
@@ -339,6 +336,7 @@ export class AgentService implements OnModuleInit {
     historyWindow: string[],
     userId: string,
   ) {
+    await this.loadAgent(userId);
     console.log('runAgent', pushName, conversation, historyWindow, userId);
 
     if (!this.clientOpenAI) {
@@ -437,7 +435,7 @@ export class AgentService implements OnModuleInit {
 Extraia intent e preferências (bairro, quartos, preço aproximado se possível, estilo).
 Responda com um texto curto, pronto para o agente usar como mensagem do cliente.`;
 
-    const resp = await this.clientOPenAI.chat.completions.create({
+    const resp = await this.clientOpenAI.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
         {
