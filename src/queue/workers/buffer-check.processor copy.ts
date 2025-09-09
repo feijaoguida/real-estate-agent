@@ -14,19 +14,14 @@ type BufferCheckPayload = {
   userId: string;
 };
 
-@Processor('buffer-check', {
-  lockDuration: 120000, // 2 minutos
-  concurrency: 5, // até 5 jobs em paralelo
-  stalledInterval: 30000, // checa jobs travados a cada 30s
-  maxStalledCount: 3, // reprocessa job travado até 3 vezes
-})
+@Processor('buffer-check')
 export class BufferCheckProcessor extends WorkerHost {
   private readonly logger = new Logger(BufferCheckProcessor.name);
 
   constructor(
     @Inject('REDIS') private readonly redis: Redis,
     private readonly agent: AgentService,
-    @InjectQueue('outbound') private readonly outboundQueue: Queue,
+    @InjectQueue('outbound') private readonly outboundQueue: Queue, // 👈 injetamos a fila outbound
   ) {
     super();
   }
@@ -52,7 +47,6 @@ export class BufferCheckProcessor extends WorkerHost {
 
     const listKey = `chat-buffer:${remoteJid}`;
     let messages = await this.redis.lrange(listKey, 0, -1);
-
     // reset buffer do redis do remoteJid se lastMessage for igual a resetMensagens
     if (lastMessage === 'resetMensagens') {
       await this.redis.del(listKey);
@@ -69,7 +63,6 @@ export class BufferCheckProcessor extends WorkerHost {
     // pega janela de contexto (últimas 15)
     const historyWindow = messages.slice(-15);
     const conversation = messages.join('\n');
-
     const text = await this.agent.runAgent(
       pushName || '',
       conversation,
@@ -77,22 +70,24 @@ export class BufferCheckProcessor extends WorkerHost {
       userId,
     );
 
-    // split por linhas / filtra vazias / ignora .webp
+    // split por linhas / filtra vazias / ignora .webp (espelhando switch do N8N)
     const lines = text
       .split(/\r?\n/)
       .map((l) => l.trim())
       .filter((l) => l && !l.endsWith('.webp'));
 
-    // dispara os jobs em paralelo, respeitando delay incremental
-    const jobs = lines.map((line, idx) =>
-      this.outboundQueue.add(
+    let delay = 0;
+    for (const line of lines) {
+      await this.outboundQueue.add(
         'send',
         { apikey, instance, number, text: line },
-        { delay: idx * 7000 }, // delay incremental
-      ),
-    );
+        { delay },
+      );
+      delay += 7000; // 7s
+    }
 
-    await Promise.all(jobs);
+    // await outbound.close();
+    // await conn.quit();
 
     this.logger.log(`Enviando ${lines.length} mensagens para ${number}`);
     return { sent: lines.length };

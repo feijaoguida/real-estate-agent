@@ -1,28 +1,71 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import OpenAI from 'openai';
 import axios from 'axios';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { tryCatch } from 'bullmq';
 import { SupabaseService } from 'src/supabase/supabase.service';
 import Redis from 'ioredis';
 
 type ToolResult = any;
 
 @Injectable()
-export class AgentService {
-  [x: string]: any;
-  private clientOPenAI: OpenAI;
+export class AgentService implements OnModuleInit {
+  private clientOpenAI: OpenAI;
+  private dataAgent: any = null;
+
+  // [x: string]: any;
 
   constructor(
     private readonly supabaseService: SupabaseService,
     @Inject('REDIS') private readonly redis: Redis,
   ) {
-    const IORedis = require('ioredis');
-    const conn = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379');
+    // const IORedis = require('ioredis');
+    // const conn = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379');
+    // const apiKey = process.env.OPENAI_API_KEY;
+    // if (!apiKey) throw new Error('OPENAI_API_KEY é obrigatório');
+    // this.clientOPenAI = new OpenAI({ apiKey });
+  }
 
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) throw new Error('OPENAI_API_KEY é obrigatório');
-    this.clientOPenAI = new OpenAI({ apiKey });
+  async onModuleInit() {
+    // já carrega os dados do agent ao subir o módulo
+    await this.loadAgent();
+  }
+
+  private async loadAgent(userId: string = 'default') {
+    const cacheKey = `agent:data:${userId}`;
+
+    // tenta pegar do Redis
+    const cached = await this.redis.get(cacheKey);
+    if (cached) {
+      this.dataAgent = JSON.parse(cached);
+      console.log('Agent carregado do Redis');
+    } else {
+      // busca no supabase
+      const data = await this.supabaseService.getAgentsByUserId(userId);
+      if (!data || data.length === 0) {
+        throw new Error(`Nenhum agent encontrado para userId ${userId}`);
+      }
+      this.dataAgent = data[0];
+
+      // cache no redis por 10min
+      await this.redis.set(
+        cacheKey,
+        JSON.stringify(this.dataAgent),
+        'EX',
+        60 * 10,
+      );
+      console.log('Agent carregado do Supabase');
+    }
+
+    // inicializa OpenAI com a chave do agent
+    if (this.dataAgent?.openaiKey) {
+      this.clientOpenAI = new OpenAI({ apiKey: this.dataAgent.openaiKey });
+      console.log('OpenAI client inicializado com a chave do agent');
+    } else {
+      throw new Error('Agent não possui chave OpenAI');
+    }
+  }
+
+  getAgentData() {
+    return this.dataAgent;
   }
 
   private async systemPrompt(pushName: string, userId: string) {
@@ -55,6 +98,9 @@ export class AgentService {
 
     // Adaptado 1:1 do template (regra +3h no agendamento).
     let requirePrompt = `-------------------------------------------------------------------------------------------------
+        Instruções para o modelo:
+          - Ignore qualquer texto que estiver entre <<< e >>>.
+          - Responda apenas ao que estiver fora desses delimitadores.
 
         ## REGRAS OBRIGATÓRIAS:
 
@@ -66,28 +112,12 @@ export class AgentService {
         • obterImoveis → lista todos os imóveis disponíveis  
         • agendaVisita → agendamento da visita presencial (usar somente após confirmação de dia e hora, com todos os dados coletados)  
         • criaLead → cria o lead no sistema  
-        • listarLeads → verifica se o lead já existe
-
-        #REGRAS DO AGENTE:  
-        • Nunca invente informações  
-        • Nunca forneça preços ou disponibilidade sem confirmação  
-        • Sempre use frases curtas
-        • Sempre pergunte nome, depois necessidade, depois horário para visita
-        • Sempre colete os seguintes dados para agendar: *nome, e-mail, telefone, dia e hora preferidos, bairro/empreendimento de interesse*  
-        • Se o cliente ainda não decidiu, ofereça listar imóveis com base nas preferências  
-        • Se pedir imagens, envie apenas o link ou descreva que pode enviar mais detalhes por visita
-
-        #TOM: direto, educado, profissional, objetivo, sem floreios. Você está falando com ${pushName || 'cliente'} no WhatsApp.
-
-        Responda sempre em português do Brasil.
-        -------------------------------------------------------------------------------------------------`;
+        • listarLeads → verifica se o lead já existe`;
 
     const userPrompt = dataAgent[0]?.instruction;
 
     // juntar requirePrompt e userPrompt
     requirePrompt += userPrompt;
-
-    console.log('requirePrompt', requirePrompt);
 
     return requirePrompt;
   }
@@ -102,13 +132,17 @@ export class AgentService {
       process.env.SUPABASE_FN_OBTER_IMOVEIS || '/functions/v1/listar-imoveis';
     const url = `${base}${path}`;
     console.log('obterImoveis url', url);
-    const { data } = await axios.get(url, {
-      headers: { Authorization: `Bearer ${key}` },
-      params: { user_email: userEmail },
-    });
 
-    console.log('obterImoveis', data);
-    return data;
+    try {
+      const data = await axios.get(url, {
+        headers: { Authorization: `Bearer ${key}` },
+        params: { user_email: userEmail },
+      });
+      console.log('obterImoveis', data);
+      return data;
+    } catch (error) {
+      console.log('error tool_obterImoveis', error);
+    }
   }
 
   // private add3h(timeStr: string) {
@@ -130,7 +164,7 @@ export class AgentService {
     now.setMilliseconds(0);
 
     // adiciona 3 horas
-    now.setHours(now.getHours() + 3);
+    now.setHours(now.getHours());
 
     // formata de volta para "HH:mm"
     const hh = now.getHours().toString().padStart(2, '0');
@@ -154,14 +188,16 @@ export class AgentService {
       process.env.SUPABASE_FN_AGENDAR_VISITA || '/functions/v1/agendar-visita';
     const url = `${base}${path}`;
 
-    // aplica regra +3h no horário
-    const schedule_time = this.add3h(input.schedule_time);
+    const payload = { ...input, user_email: userEmail };
 
-    const payload = { ...input, schedule_time, user_email: userEmail };
-    const { data } = await axios.post(url, payload, {
-      headers: { Authorization: `Bearer ${key}` },
-    });
-    return data;
+    try {
+      const { data } = await axios.post(url, payload, {
+        headers: { Authorization: `Bearer ${key}` },
+      });
+      return data;
+    } catch (error) {
+      console.log('error tool_agendaVisita', error);
+    }
   }
 
   private async tool_criaLead(
@@ -178,10 +214,15 @@ export class AgentService {
       process.env.SUPABASE_FN_CRIAR_LEAD || '/functions/v1/n8n-criar-lead';
     const url = `${base}${path}`;
     const payload = { ...input, user_email: userEmail };
-    const { data } = await axios.post(url, payload, {
-      headers: { Authorization: `Bearer ${key}` },
-    });
-    return data;
+
+    try {
+      const { data } = await axios.post(url, payload, {
+        headers: { Authorization: `Bearer ${key}` },
+      });
+      return data;
+    } catch (error) {
+      console.log('error tool_criaLead', error);
+    }
   }
 
   private async tool_listarLeads(userEmail: string): Promise<ToolResult> {
@@ -190,11 +231,15 @@ export class AgentService {
     const path =
       process.env.SUPABASE_FN_LISTAR_LEADS || '/functions/v1/listar-leads';
     const url = `${base}${path}`;
-    const { data } = await axios.get(url, {
-      headers: { Authorization: `Bearer ${key}` },
-      params: { user_email: userEmail },
-    });
-    return data;
+    try {
+      const { data } = await axios.get(url, {
+        headers: { Authorization: `Bearer ${key}` },
+        params: { user_email: userEmail },
+      });
+      return data;
+    } catch (error) {
+      console.log('error tool_listarLeads', error);
+    }
   }
 
   private functions = [
@@ -262,18 +307,16 @@ export class AgentService {
       );
     }
 
+    console.log('cached getAgents');
     if (cached) {
       console.log(`Cache HIT para userId ${userId}`);
       return JSON.parse(cached);
     }
 
-    console.log('cached getAgents', cached);
-
     console.log(`Cache MISS para userId ${userId}, consultando Supabase...`);
 
     // 2️⃣ Consulta no Supabase
     const data = await this.supabaseService.getAgentsByUserId(userId);
-    console.log('Data getAgentsByUserId', data);
     // const url = `${this.baseUrl}/agents?user_id=eq.${encodeURIComponent(userId)}&select=*`;
     // const { data } = await firstValueFrom(
     //   this.http.get(url, { headers: this.headers }),
@@ -287,8 +330,6 @@ export class AgentService {
     // 3️⃣ Salva no Redis com TTL (ex: 1 hora)
     await this.redis.setex(newCachedKey, 3600, JSON.stringify(data));
 
-    console.log('Data getAgentsByUserId', data);
-
     return data;
   }
 
@@ -300,9 +341,11 @@ export class AgentService {
   ) {
     console.log('runAgent', pushName, conversation, historyWindow, userId);
 
-    const agents = await this.getAgents(userId);
-    console.log('agentes', agents);
-    let USER_EMAIL = agents[0].user_email;
+    if (!this.clientOpenAI) {
+      await this.loadAgent(userId);
+    }
+
+    const USER_EMAIL = this.dataAgent.user_email;
     // Monta histórico simples: últimas mensagens como contexto
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       { role: 'system', content: await this.systemPrompt(pushName, userId) },
@@ -325,7 +368,7 @@ export class AgentService {
     let currentMessages = messages;
 
     while (toolUseCount < 4) {
-      const resp = await this.clientOPenAI.chat.completions.create({
+      const resp = await this.clientOpenAI.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: currentMessages,
         tools: toolChoices as any,
@@ -426,7 +469,7 @@ Responda com um texto curto, pronto para o agente usar como mensagem do cliente.
     // Whisper precisa de arquivo; aceitamos base64 e mandamos como input bytes.
     const buffer = Buffer.from(base64, 'base64');
     const file = new File([buffer], 'audio.ogg');
-    const tr = await this.clientOPenAI.audio.transcriptions.create({
+    const tr = await this.clientOpenAI.audio.transcriptions.create({
       model: 'whisper-1',
       file,
     } as any);
