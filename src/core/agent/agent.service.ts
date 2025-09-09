@@ -343,7 +343,7 @@ export class AgentService implements OnModuleInit {
       await this.loadAgent(userId);
     }
 
-    const USER_EMAIL = this.dataAgent.user_email;
+    const USER_EMAIL = this.dataAgent.email;
     // Monta histórico simples: últimas mensagens como contexto
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       { role: 'system', content: await this.systemPrompt(pushName, userId) },
