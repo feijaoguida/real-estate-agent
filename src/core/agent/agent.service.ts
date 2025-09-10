@@ -109,7 +109,34 @@ export class AgentService implements OnModuleInit {
         • obterImoveis → lista todos os imóveis disponíveis  
         • agendaVisita → agendamento da visita presencial (usar somente após confirmação de dia e hora, com todos os dados coletados)  
         • criaLead → cria o lead no sistema  
-        • listarLeads → verifica se o lead já existe`;
+        • listarLeads → verifica se o lead já existe
+
+        #INSTRUÇÕES ESPECIAIS:
+
+        •⁠  ⁠Sempre aja como *(seu nome)*, nunca diga que é um assistente ou IA.  
+        •⁠  ⁠Use *linguagem ativa, humanizada e com frases curtas*.  
+        •⁠  ⁠*.Não fique repetindo*. o nome do lead, *.somente quando for necessário*. 
+        •⁠  ⁠Só avance para o agendamento *após entender o interesse e perfil do cliente*.  
+        •⁠  ⁠Antes de usar a ferramenta *agendaVisita, **pergunte e colete todos os dados obrigatórios*:  
+          • Nome completo  
+          • Telefone  
+          • Data  
+          • Horário 
+        •  Faça sempre uma pergunta por vez, *nunca envie duas ou mais perguntas de uma só vez*.  
+        •  Nunca diga que é um assistente ou IA.
+        •  Nunca fica repetindo o que o lead falou, siga para o próximo passo. 
+
+        #REGRAS DO AGENTE:  
+        •⁠  ⁠Nunca invente informações  
+        •⁠  ⁠Sempre use frases curtas  
+        •⁠  ⁠Sempre pergunte nome, depois necessidade, depois horário para visita  
+        •⁠  ⁠Sempre colete os seguintes dados para agendar: *nome, telefone, data e horário*  
+        •⁠  ⁠Sempre execute corretamente as ferramentas  
+        •⁠  ⁠Nunca repita agendaVisita ou criaLead no mesmo atendimento  
+        •⁠  ⁠Utilize os dados deste prompt sempre como referência
+        •⁠  Se apresente apenas na saudação inicial
+        •⁠  Evite ficar repentindo mensagens do lead
+          `;
 
     const userPrompt = dataAgent[0]?.instruction;
 
@@ -149,25 +176,25 @@ export class AgentService implements OnModuleInit {
   //   return date.add(3, 'hour').format('HH:mm');
   // }
 
-  private add3h(timeStr: string) {
-    // espera "HH:mm"
-    const [h, m] = timeStr.split(':').map((x) => parseInt(x, 10));
+  // private add3h(timeStr: string) {
+  //   // espera "HH:mm"
+  //   const [h, m] = timeStr.split(':').map((x) => parseInt(x, 10));
 
-    // cria um Date com a hora e minuto atuais ajustados
-    const now = new Date();
-    now.setHours(h);
-    now.setMinutes(m);
-    now.setSeconds(0);
-    now.setMilliseconds(0);
+  //   // cria um Date com a hora e minuto atuais ajustados
+  //   const now = new Date();
+  //   now.setHours(h);
+  //   now.setMinutes(m);
+  //   now.setSeconds(0);
+  //   now.setMilliseconds(0);
 
-    // adiciona 3 horas
-    now.setHours(now.getHours());
+  //   // adiciona 3 horas
+  //   now.setHours(now.getHours());
 
-    // formata de volta para "HH:mm"
-    const hh = now.getHours().toString().padStart(2, '0');
-    const mm = now.getMinutes().toString().padStart(2, '0');
-    return `${hh}:${mm}`;
-  }
+  //   // formata de volta para "HH:mm"
+  //   const hh = now.getHours().toString().padStart(2, '0');
+  //   const mm = now.getMinutes().toString().padStart(2, '0');
+  //   return `${hh}:${mm}`;
+  // }
 
   private async tool_agendaVisita(
     input: {
@@ -385,21 +412,38 @@ export class AgentService implements OnModuleInit {
           ? JSON.parse(call.function.arguments)
           : {};
 
+        console.log(`🤖 Modelo pediu a tool: ${name}`);
+        console.log(`📦 Args recebidos:`, args);
+
         let result: any = null;
         try {
-          if (name === 'obterImoveis')
-            result = await this.tool_obterImoveis(USER_EMAIL);
-          if (name === 'agendaVisita')
+          if (name === 'obterImoveis') {
+            const res = await this.tool_obterImoveis(USER_EMAIL);
+            result = res.data;
+          }
+          if (name === 'agendaVisita') {
             result = await this.tool_agendaVisita(args, USER_EMAIL);
-          if (name === 'criaLead')
+          }
+          if (name === 'criaLead') {
             result = await this.tool_criaLead(args, USER_EMAIL);
-          if (name === 'listarLeads')
-            result = await this.tool_listarLeads(USER_EMAIL);
+          }
+          if (name === 'listarLeads') {
+            const res = await this.tool_listarLeads(USER_EMAIL);
+            result = res.data;
+          }
         } catch (e: any) {
           result = { error: true, message: e?.message || String(e) };
         }
 
-        console.log('result tools', result);
+        // garantir que não vem undefined
+        if (result === undefined) {
+          result = {
+            error: true,
+            message: `Não consegui executar nenhuma ferramenta`,
+          };
+        }
+
+        console.log(`✅ Resultado da tool (${name}):`, result);
 
         currentMessages = [
           ...currentMessages,
@@ -415,6 +459,7 @@ export class AgentService implements OnModuleInit {
       }
 
       // se não pediu ferramenta, finaliza
+      console.log('🎯 Resposta final do modelo:', choice.message.content);
       break;
     }
 
