@@ -213,6 +213,12 @@ export class AgentService implements OnModuleInit {
       process.env.SUPABASE_FN_AGENDAR_VISITA || '/functions/v1/agendar-visita';
     const url = `${base}${path}`;
 
+    // 🔑 busca lead_id no Redis salvo no criar lead.
+    const leadId = await this.redis.get(`lead:last:${userEmail}`);
+    if (leadId) {
+      input.lead_id = leadId;
+    }
+
     const payload = { ...input, user_email: userEmail };
 
     try {
