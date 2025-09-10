@@ -116,7 +116,10 @@ export class AgentService implements OnModuleInit {
         •⁠  ⁠Sempre aja como *(seu nome)*, nunca diga que é um assistente ou IA.  
         •⁠  ⁠Use *linguagem ativa, humanizada e com frases curtas*.  
         •⁠  ⁠*.Não fique repetindo*. o nome do lead, *.somente quando for necessário*. 
-        •⁠  ⁠Só avance para o agendamento *após entender o interesse e perfil do cliente*.  
+        •⁠  ⁠Só avance para o agendamento *após entender o interesse e perfil do cliente*. 
+        •⁠  Nunca digite o telefone ou o nome do lead, apenas pergunte e colete os dados.
+        •⁠  Depois de Criar o lead, *agende a visita*. 
+        •⁠  Nunca repita a ferramenta criaLead no mesmo atendimento.
         •⁠  ⁠Antes de usar a ferramenta *agendaVisita, **pergunte e colete todos os dados obrigatórios*:  
           • Nome completo  
           • Telefone  
@@ -124,7 +127,9 @@ export class AgentService implements OnModuleInit {
           • Horário 
         •  Faça sempre uma pergunta por vez, *nunca envie duas ou mais perguntas de uma só vez*.  
         •  Nunca diga que é um assistente ou IA.
-        •  Nunca fica repetindo o que o lead falou, siga para o próximo passo. 
+        •  Nunca fica repetindo o que o lead falou, siga para o próximo passo.
+        •⁠  Ao Criar o Lead prossiga para o agendaVisita.
+        •⁠  Ao Criar o agendamento informe que o agendamento foi feito com sucesso.
 
         #REGRAS DO AGENTE:  
         •⁠  ⁠Nunca invente informações  
@@ -168,33 +173,6 @@ export class AgentService implements OnModuleInit {
       console.log('error tool_obterImoveis', error);
     }
   }
-
-  // private add3h(timeStr: string) {
-  //   // espera "HH:mm"
-  //   const [h, m] = timeStr.split(':').map((x) => parseInt(x, 10));
-  //   const date = dayjs().hour(h).minute(m).second(0);
-  //   return date.add(3, 'hour').format('HH:mm');
-  // }
-
-  // private add3h(timeStr: string) {
-  //   // espera "HH:mm"
-  //   const [h, m] = timeStr.split(':').map((x) => parseInt(x, 10));
-
-  //   // cria um Date com a hora e minuto atuais ajustados
-  //   const now = new Date();
-  //   now.setHours(h);
-  //   now.setMinutes(m);
-  //   now.setSeconds(0);
-  //   now.setMilliseconds(0);
-
-  //   // adiciona 3 horas
-  //   now.setHours(now.getHours());
-
-  //   // formata de volta para "HH:mm"
-  //   const hh = now.getHours().toString().padStart(2, '0');
-  //   const mm = now.getMinutes().toString().padStart(2, '0');
-  //   return `${hh}:${mm}`;
-  // }
 
   private async tool_agendaVisita(
     input: {
