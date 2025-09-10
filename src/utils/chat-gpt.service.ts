@@ -40,7 +40,7 @@ Usuário: "Quero aprender a tocar violão."
 IA: "Boa! O violão é um ótimo instrumento. Você já tem um em casa ou está pensando em comprar primeiro?"`;
 
     const structured = await openai.responses.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-4.1',
       input: JSON.stringify(message),
       instructions: prompt,
     });

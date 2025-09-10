@@ -67,8 +67,16 @@ export class BufferCheckProcessor extends WorkerHost {
     }
 
     // pega janela de contexto (últimas 15)
-    const historyWindow = messages.slice(-15);
-    const conversation = messages.join('\n');
+    let historyWindow = messages.slice(-15);
+    let conversation = messages.join('\n');
+
+    // reset buffer do redis do remoteJid se lastMessage for igual a resetMensagens
+    if (lastMessage === 'resetMensagens') {
+      await this.redis.del(listKey);
+      messages = [];
+      conversation = '';
+      historyWindow = [];
+    }
 
     const text = await this.agent.runAgent(
       pushName || '',
@@ -88,7 +96,7 @@ export class BufferCheckProcessor extends WorkerHost {
       this.outboundQueue.add(
         'send',
         { apikey, instance, number, text: line },
-        { delay: idx * 7000 }, // delay incremental
+        { delay: idx * 6000 }, // delay incremental
       ),
     );
 

@@ -52,7 +52,6 @@ export class AgentService implements OnModuleInit {
         'EX',
         60 * 10,
       );
-      console.log('Agent carregado do Supabase this.dataAgent', this.dataAgent);
     }
 
     // inicializa OpenAI com a chave do agent
@@ -107,8 +106,8 @@ export class AgentService implements OnModuleInit {
 
         #FERRAMENTAS DISPONÍVEIS:  
         • obterImoveis → lista todos os imóveis disponíveis  
-        • agendaVisita → agendamento da visita presencial (usar somente após confirmação de dia e hora, com todos os dados coletados)  
-        • criaLead → cria o lead no sistema  
+        • agendaVisita → Utilize essa ferramenta para agendar visitas (usar somente após confirmação de dia e hora, com todos os dados coletados)  
+        • criaLead → Utilize essa ferramenta para criar o lead dentro do CRM  
         • listarLeads → verifica se o lead já existe
 
         #INSTRUÇÕES ESPECIAIS:
@@ -124,7 +123,31 @@ export class AgentService implements OnModuleInit {
           • Nome completo  
           • Telefone  
           • Data  
-          • Horário 
+          • Horário
+          # Exemplo1: AgendaVisita.
+              Usuário: "Quero agendar amanhã as 14 da tarde"
+              IA: "Qual o nome completo?"
+              Usuário: "João da Silva"
+              IA: "Qual o telefone?"
+              Usuário: "11999999999"
+              IA: "Qual a data?"
+              Usuário: "amanha as 14 da tarde" ou "20/09/2025 as 2 da tarde"
+              IA: "Confirmando dos dados aqui para efetuar o agendamento, Amanha as 14 da tarde, João da Silva, 11999999999"
+              Usuário: "Confirme"
+              IA: "O agendamento foi feito com sucesso"
+          # Exemplo2: AgendaVisita.
+              Usuário: "Quero agendar amanhã as 14 da tarde"
+              IA: "Ok, vamos agendar amanhã as 14 da tarde, mais antes de informe alguns dados seus."
+              IA: "Nome completo"
+              Usuário: "João da Silva"
+              IA: "Telefone"  
+              Usuário: "11999999999"
+              IA: "Data"
+              Usuário: "20/09/2025 as 2 da tarde" ou "amanha as 14 da tarde" ou "20 de setembro as 2 da tarde"
+              IA: "Confirmando dos dados aqui para efetuar o agendamento, para o dia de setembro as 14 da tarde, Para o João da Silva, 11999999999"
+              Usuário: "Confirme"
+              IA: "O agendamento foi feito com sucesso"
+          
         •  Faça sempre uma pergunta por vez, *nunca envie duas ou mais perguntas de uma só vez*.  
         •  Nunca diga que é um assistente ou IA.
         •  Nunca fica repetindo o que o lead falou, siga para o próximo passo.
@@ -176,7 +199,7 @@ export class AgentService implements OnModuleInit {
 
   private async tool_agendaVisita(
     input: {
-      lead_id: string;
+      lead_id?: string;
       schedule_date: string;
       schedule_time: string;
       notes?: string;
@@ -221,6 +244,16 @@ export class AgentService implements OnModuleInit {
       const { data } = await axios.post(url, payload, {
         headers: { Authorization: `Bearer ${key}` },
       });
+
+      // 🔑 salva lead_id no Redis para usar no agendaVisita
+      if (data?.lead_id) {
+        await this.redis.set(
+          `lead:last:${userEmail}`,
+          data.lead_id,
+          'EX',
+          60 * 10,
+        ); // expira em 10 min
+      }
       return data;
     } catch (error) {
       console.log('error tool_criaLead', error);
@@ -256,7 +289,7 @@ export class AgentService implements OnModuleInit {
     {
       name: 'agendaVisita',
       description:
-        'Agenda visita presencial. Exige lead_id, schedule_date (DD/MM/YYYY) e schedule_time (HH:mm).',
+        'Utilize essa ferramenta para agendar visitas. Exige lead_id, schedule_date (DD/MM/YYYY) e schedule_time (HH:mm).',
       parameters: {
         type: 'object',
         properties: {
@@ -264,7 +297,7 @@ export class AgentService implements OnModuleInit {
           schedule_date: { type: 'string', description: 'Formato DD/MM/YYYY' },
           schedule_time: {
             type: 'string',
-            description: 'HH:mm (será ajustado para +3h)',
+            description: 'HH:mm ()',
           },
           notes: { type: 'string' },
           property_interest_id: { type: 'string' },
@@ -274,7 +307,8 @@ export class AgentService implements OnModuleInit {
     },
     {
       name: 'criaLead',
-      description: 'Cria lead caso não exista. Requer name, email, phone.',
+      description:
+        'Utilize essa ferramenta para criar o lead dentro do CRM. Requer name, email, phone.',
       parameters: {
         type: 'object',
         properties: {
@@ -372,7 +406,7 @@ export class AgentService implements OnModuleInit {
 
     while (toolUseCount < 4) {
       const resp = await this.clientOpenAI.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4.1',
         messages: currentMessages,
         tools: toolChoices as any,
         tool_choice: 'auto',
@@ -459,7 +493,7 @@ Extraia intent e preferências (bairro, quartos, preço aproximado se possível,
 Responda com um texto curto, pronto para o agente usar como mensagem do cliente.`;
 
     const resp = await this.clientOpenAI.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-4.1',
       messages: [
         {
           role: 'system',
