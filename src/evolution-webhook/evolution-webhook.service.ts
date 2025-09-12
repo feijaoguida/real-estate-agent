@@ -76,6 +76,12 @@ export class EvolutionWebhookService {
       return { ok: true, ignored: true };
     }
 
+    // 🚫 Ignora mensagens de grupo
+    if (remoteJid.endsWith('@g.us')) {
+      this.logger.debug(`Ignorando mensagem de grupo: ${remoteJid}`);
+      return { ok: true, ignored: true, reason: 'group message' };
+    }
+
     // Quando é do próprio atendente/humano: seta PAUSA (TTL 300s) e não responde.
     if (fromMe) {
       await this.redis.set(
@@ -97,8 +103,6 @@ export class EvolutionWebhookService {
 
     // Texto
     text = msg?.conversation || msg?.extendedTextMessage?.text || null;
-
-    console.log('text', text);
 
     // Imagem (gera texto a partir da imagem)
     if (!text && msg?.imageMessage) {
@@ -132,12 +136,17 @@ export class EvolutionWebhookService {
       return { ok: true, ignored: true, reason: 'unsupported message type' };
     }
 
-    const userGet = await this.getUserIdByInstance(instance);
+    // salvar user id no redis e buscar antes do getUserIdInstance
+    const listKeyUser = `whatsapp_config:${instance}`;
+    const userRedis = await this.redis.get(listKeyUser);
+    let userGet = userRedis;
+    if (!userRedis) {
+      const userInstance = await this.getUserIdByInstance(instance);
+      await this.redis.set(listKeyUser, JSON.stringify(userGet), 'EX', 60 * 30);
+      userGet = userInstance;
+    }
 
-    console.log(
-      '########### userGet getUserIdByInstance ##############',
-      userGet,
-    );
+    console.log('userGet', userGet);
 
     // Guarda no buffer (RPUSH) e agenda verificação em 12s
     const listKey = `chat-buffer:${remoteJid}`;

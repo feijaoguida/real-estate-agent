@@ -68,6 +68,7 @@ export class BufferCheckProcessor extends WorkerHost {
       conversation,
       historyWindow,
       userId,
+      remoteJid,
     );
 
     // split por linhas / filtra vazias / ignora .webp (espelhando switch do N8N)

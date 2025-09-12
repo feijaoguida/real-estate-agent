@@ -14,6 +14,11 @@ type BufferCheckPayload = {
   userId: string;
 };
 
+interface ChatMessage {
+  role: 'user' | 'assistant' | 'system' | 'tool';
+  content: string;
+}
+
 @Processor('buffer-check', {
   lockDuration: 120000, // 2 minutos
   concurrency: 5, // até 5 jobs em paralelo
@@ -51,41 +56,54 @@ export class BufferCheckProcessor extends WorkerHost {
     }
 
     const listKey = `chat-buffer:${remoteJid}`;
-    let messages = await this.redis.lrange(listKey, 0, -1);
+    let raw = await this.redis.lrange(listKey, 0, -1);
+    let messages: ChatMessage[] = raw.map((m) => JSON.parse(m));
+    // let messages = await this.redis.lrange(listKey, 0, -1);
 
     // reset buffer do redis do remoteJid se lastMessage for igual a resetMensagens
-    if (lastMessage === 'resetMensagens') {
-      await this.redis.del(listKey);
-      messages = [];
-    }
+    // if (lastMessage === 'resetMensagens') {
+    //   await this.redis.del(listKey);
+    //   messages = [];
+    // }
 
-    const currentLast = messages.length ? messages[messages.length - 1] : '';
-
+    // confere última msg
+    const currentLast = messages.length
+      ? messages[messages.length - 1].content
+      : '';
     if (currentLast !== lastMessage) {
       this.logger.log(`skip (new message arrived) ${remoteJid}`);
       return;
     }
+    // const currentLast = messages.length ? messages[messages.length - 1] : '';
+
+    // if (currentLast !== lastMessage) {
+    //   this.logger.log(`skip (new message arrived) ${remoteJid}`);
+    //   return;
+    // }
 
     // pega janela de contexto (últimas 15)
     let historyWindow = messages.slice(-15);
-    let conversation = messages.join('\n');
+
+    // pega só a última entrada do usuário
+    let lastUserMessage =
+      historyWindow.filter((m) => m.role === 'user').slice(-1)[0]?.content ||
+      '';
+    // let historyWindow = messages.slice(-15);
+    // let conversation = messages.join('\n');
 
     // reset buffer do redis do remoteJid se lastMessage for igual a resetMensagens
     if (lastMessage === 'resetMensagens') {
       await this.redis.del(listKey);
-      const newCachedKey = `agents_id:${remoteJid}`;
-      await this.redis.del(newCachedKey);
       messages = [];
-      conversation = '';
+      lastUserMessage = '';
       historyWindow = [];
     }
 
     const text = await this.agent.runAgent(
       pushName || '',
-      conversation,
+      lastUserMessage,
       historyWindow,
       userId,
-      remoteJid,
     );
 
     // split por linhas / filtra vazias / ignora .webp
@@ -93,6 +111,14 @@ export class BufferCheckProcessor extends WorkerHost {
       .split(/\r?\n/)
       .map((l) => l.trim())
       .filter((l) => l && !l.endsWith('.webp'));
+
+    // salva no histórico como assistant
+    for (const line of lines) {
+      await this.redis.rpush(
+        listKey,
+        JSON.stringify({ role: 'assistant', content: line }),
+      );
+    }
 
     // dispara os jobs em paralelo, respeitando delay incremental
     const jobs = lines.map((line, idx) =>
