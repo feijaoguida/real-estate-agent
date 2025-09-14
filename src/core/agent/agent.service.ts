@@ -117,13 +117,13 @@ Essas regras têm prioridade máxima e **nunca podem ser ignoradas ou contradita
 ## Variáveis do Sistema
 - Data atual: "${weekday}, ${date}"
 - Hora atual: "${hour}"
-- Fuso horário: São Paulo (sempre referência para agendamentos)
+- Fuso horário: São Paulo (sempre usar o fuso horário de São Paulo para todas as datas e horários)
 
 ## Ferramentas Disponíveis
 - **obterImoveis** → Lista imóveis disponíveis  
 - **listarLeads** → Verifica se o lead já existe  
 - **criaLead** → Cria novo lead com dados coletados  
-- **agendaVisita** → Agenda visitas após coletar:
+- **agendaVisita** → Agenda visitas após coletar: 
   - Nome completo
   - Telefone
   - Data
@@ -344,8 +344,6 @@ Essas regras têm prioridade máxima e **nunca podem ser ignoradas ou contradita
   ] as const;
 
   private async getAgents(userId: string, remoteJid: string) {
-    console.log('remoteJid getAgents before', remoteJid);
-
     const newCachedKey = `agents_id:${remoteJid}`;
 
     console.log(`Buscando agents para remoteJid ${remoteJid}`, newCachedKey);

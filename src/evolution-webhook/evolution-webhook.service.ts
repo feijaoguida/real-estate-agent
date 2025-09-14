@@ -136,17 +136,12 @@ export class EvolutionWebhookService {
       return { ok: true, ignored: true, reason: 'unsupported message type' };
     }
 
-    // salvar user id no redis e buscar antes do getUserIdInstance
-    const listKeyUser = `whatsapp_config:${instance}`;
-    const userRedis = await this.redis.get(listKeyUser);
-    let userGet = userRedis;
-    if (!userRedis) {
-      const userInstance = await this.getUserIdByInstance(instance);
-      await this.redis.set(listKeyUser, JSON.stringify(userGet), 'EX', 60 * 30);
-      userGet = userInstance;
-    }
+    const userGet = await this.getUserIdByInstance(instance);
 
-    console.log('userGet', userGet);
+    console.log(
+      '########### userGet getUserIdByInstance ##############',
+      userGet,
+    );
 
     // Guarda no buffer (RPUSH) e agenda verificação em 12s
     const listKey = `chat-buffer:${remoteJid}`;
